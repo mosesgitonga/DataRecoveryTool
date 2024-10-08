@@ -13,6 +13,17 @@ typedef struct {
     unsigned long blocks;
 } Device;
 
+int open_disk(const char *device_name) {
+    int fd = open(device_name, O_RDONLY);
+    if (fd < 0) {
+        printf("unable to open disk\nCheck your permissions");
+        
+        return -1;
+    }
+    printf("successfully opened the disk\n");
+    return fd;
+}
+
 int scan_disk() {
     int fd;
     unsigned long num_sectors;
@@ -61,5 +72,11 @@ int scan_disk() {
 
     printf("You have selected: %s (major: %u, minor: %u, blocks: %lu)\n", devices[choice].name, devices[choice].major, devices[choice].minor, devices[choice].blocks);
 
+    open_disk(devices[choice].name);
     return 0;
+}
+
+
+int check_file_system_type() {
+
 }
