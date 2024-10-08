@@ -13,10 +13,48 @@ typedef struct {
     unsigned long blocks;
 } Device;
 
+#include <stdio.h>
+#include <sys/statfs.h>
+#include <string.h> 
+
+int is_valid_file_system_type(const char *device_name) {
+    // Checks the file system type
+    // In this current version, we are only supporting ext4 file system
+    // This file system is mostly used by Linux-based distros
+
+    struct statfs buf;
+
+    if (statfs(device_name, &buf) != 0) {
+        perror("Error retrieving filesystem info");
+        return -1;
+    }
+
+    switch (buf.f_type) {
+        case EXT4_SUPER_MAGIC:
+            printf("File system type: ext4\n");
+            break;
+        case XFS_SUPER_MAGIC:
+            printf("Unsupported File system type: xfs\n");
+            return -1;
+         
+        case TMPFS_MAGIC:
+            printf("Unsupported FileSystem type: tmpfs\n");
+            break;
+        case BTRFS_SUPER_MAGIC:
+            printf("Unsupported File system type: btrfs\n");
+            return -1;
+        default:
+            printf("File system type: unknown (0x%lx)\n", buf.f_type);
+            break;
+    }
+    return 0;
+}
+
 int open_disk(const char *device_name) {
+    int res = is_valid_file_system_type(device_name);
     int fd = open(device_name, O_RDONLY);
     if (fd < 0) {
-        printf("unable to open disk\nCheck your permissions");
+        perror("Error: unable to open disk\nCheck your permissions");
         
         return -1;
     }
@@ -66,7 +104,7 @@ int scan_disk() {
 
     printf("Enter the number of the device you want to select for recovery: ");
     if (scanf("%d", &choice) != 1 || choice < 0 || choice >= device_count) {
-        printf("Invalid Selection");
+        printf("Invalid Selection\n");
         return 1;
     }
 
@@ -77,6 +115,3 @@ int scan_disk() {
 }
 
 
-int check_file_system_type() {
-
-}
