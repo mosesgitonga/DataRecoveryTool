@@ -13,18 +13,33 @@ typedef struct {
     unsigned long blocks;
 } Device;
 
-#include <stdio.h>
-#include <sys/statfs.h>
-#include <string.h> 
+int get_mount_point(const char *device_name, char *mount_point, size_t size) {
+    FILE *file = fopen("/proc/mounts", "r");
+    if (!file) {
+        perror("Unable to open /proc/mounts");
+        return -1;
+    }
 
-int is_valid_file_system_type(const char *device_name) {
-    // Checks the file system type
-    // In this current version, we are only supporting ext4 file system
-    // This file system is mostly used by Linux-based distros
+    char buffer[256];
+    while (fgets(buffer, sizeof(buffer), file)) {
+        char dev[32], mnt[32], type[32];
+        if (sscanf(buffer, "%s %s %s", dev, mnt, type) == 3) {
+            if (strcmp(dev, device_name) == 0) {
+                strncpy(mount_point, mnt, size);
+                fclose(file);
+                return 0;  
+            }
+        }
+    }
 
+    fclose(file);
+    return -1; 
+}
+
+int is_valid_file_system_type(const char *mount_point) {
     struct statfs buf;
 
-    if (statfs(device_name, &buf) != 0) {
+    if (statfs(mount_point, &buf) != 0) {
         perror("Error retrieving filesystem info");
         return -1;
     }
@@ -36,26 +51,34 @@ int is_valid_file_system_type(const char *device_name) {
         case XFS_SUPER_MAGIC:
             printf("Unsupported File system type: xfs\n");
             return -1;
-         
         case TMPFS_MAGIC:
             printf("Unsupported FileSystem type: tmpfs\n");
-            break;
+            return -1;  
         case BTRFS_SUPER_MAGIC:
             printf("Unsupported File system type: btrfs\n");
             return -1;
         default:
-            printf("File system type: unknown (0x%lx)\n", buf.f_type);
-            break;
+            printf("File system type: unknown (0x%lx) Only ext4 is supported\n", buf.f_type);
+            return -1;
     }
     return 0;
 }
 
 int open_disk(const char *device_name) {
-    int res = is_valid_file_system_type(device_name);
+    char mount_point[64];
+    
+    if (get_mount_point(device_name, mount_point, sizeof(mount_point)) != 0) {
+        printf("Mount point not found for device: %s\n", device_name);
+        return -1;  
+    }
+
+    int res = is_valid_file_system_type(mount_point);
+    if (res != 0) {
+        return -1; 
+    }
     int fd = open(device_name, O_RDONLY);
     if (fd < 0) {
         perror("Error: unable to open disk\nCheck your permissions");
-        
         return -1;
     }
     printf("successfully opened the disk\n");
@@ -69,11 +92,7 @@ int scan_disk() {
     int device_count = 0;
 
     FILE *file = fopen("/proc/partitions", "r");
-    if (file == NULL) {
-        perror("Unable to open /proc/partitions");
-        return 1 ;
-    }
-
+    if (file == NULL) {perror("Unable to open /proc/partitions"); return 1 ;}
     char buffer[256];
     while (fgets(buffer, sizeof(buffer), file)) {
         unsigned int major, minor;
